@@ -8,12 +8,12 @@
 - **Курсовая.ipynb** — курсовая работа по статистике, включает расчёты и визуализацию.  
 - **ANOVA.ipynb** — пример дисперсионного анализа (ANOVA) с интерпретацией результатов.  
 
-##️ Как открыть
+## Как открыть
 1. Скачайте репозиторий или отдельный файл.  
 2. Установите Jupyter Notebook (или используйте Google Colab).  
 3. Откройте файл с расширением `.ipynb`.  
 
 ## Автор
 - **Timofey Medvedev**  
-- Email: *(можно добавить)*  
+- Email: timofey.m.medvedev@gmail.com 
 - GitHub: [timofeymmedvedev](https://github.com/timofeymmedvedev)
