@@ -13,8 +13,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from mpc.aggregate import drop_outliers, pick_matches, summarize
 from mpc.normalize import build_query, tokenize
 from mpc.relevance import Reference
-from mpc.sources.base import parse_price
-from mpc.sources.ozon import extract_offers
+from mpc.sources.base import SourceError, parse_price
+from mpc.sources.ozon import OzonSource, _describe, extract_offers
 from mpc.sources.wildberries import _extract_price
 
 
@@ -172,6 +172,81 @@ class TestOzonExtraction(unittest.TestCase):
     def test_пустой_ответ(self):
         self.assertEqual(extract_offers({}), [])
         self.assertEqual(extract_offers({"widgetStates": {"x": "не json"}}), [])
+
+
+class FakePage:
+    """Страница-заглушка: отдаёт заданный текст и считает переходы."""
+
+    def __init__(self, browser, body):
+        self.browser = browser
+        self.body = body
+
+    def goto(self, url, **kwargs):
+        self.browser.visited.append(url)
+
+    def inner_text(self, _selector):
+        return self.body
+
+    def wait_for_selector(self, *a, **kw):
+        pass
+
+    def wait_for_timeout(self, *a, **kw):
+        pass
+
+    def evaluate(self, _script):
+        return self.browser.dom_items
+
+    def close(self):
+        pass
+
+
+class FakeBrowser:
+    def __init__(self, api_body, dom_items=None):
+        self.api_body = api_body
+        self.dom_items = dom_items or []
+        self.visited = []
+
+    def new_page(self):
+        return FakePage(self, self.api_body)
+
+
+class TestOzonFallback(unittest.TestCase):
+    def test_прогревает_сессию_перед_первым_запросом(self):
+        import json
+        payload = {"widgetStates": {"w": json.dumps({
+            "items": [{
+                "action": {"link": "/product/x-1/"},
+                "mainState": [
+                    {"atom": {"textAtom": {"text": "Мотор Surpass Hobby BAT S5322 380KV"}}},
+                    {"atom": {"priceV2": {"price": [{"text": "5 000 ₽", "textStyle": "PRICE"}]}}},
+                ],
+            }]
+        })}}
+        browser = FakeBrowser(json.dumps(payload))
+        offers = OzonSource(browser).search("мотор s5322")
+        self.assertTrue(browser.visited[0].startswith("https://www.ozon.ru/"))
+        self.assertEqual(len(offers), 1)
+
+    def test_переходит_на_страницу_поиска_когда_api_не_json(self):
+        browser = FakeBrowser(
+            "<html>обычная страница</html>",
+            dom_items=[{"title": "Мотор Surpass Hobby BAT S5322 380KV",
+                        "price": "5000", "url": "/product/x-1/"}],
+        )
+        offers = OzonSource(browser).search("мотор s5322")
+        self.assertEqual(len(offers), 1)
+        self.assertEqual(offers[0]["price"], 5000.0)
+        self.assertTrue(any("/search/" in u for u in browser.visited))
+
+    def test_обе_попытки_провалились(self):
+        browser = FakeBrowser("Доступ ограничен: проверка")
+        with self.assertRaises(SourceError):
+            OzonSource(browser).search("мотор s5322")
+
+    def test_описание_антибот_страницы(self):
+        self.assertEqual(_describe("Доступ ограничен"), "страница антибот-проверки")
+        self.assertEqual(_describe(""), "пустой ответ")
+        self.assertIn("обычный текст", _describe("обычный текст ответа"))
 
 
 class TestExcelReport(unittest.TestCase):
