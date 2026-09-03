@@ -10,6 +10,16 @@ import argparse
 import sys
 import time
 
+# Консоль Windows по умолчанию работает не в UTF-8, и печать русских названий
+# товаров в прогресс-строке роняет прогон с UnicodeEncodeError. Переключаем
+# вывод на UTF-8 с заменой непечатаемых символов, чтобы многочасовой сбор не
+# прерывался из-за одного названия.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
+
 from mpc import config
 from mpc.aggregate import pick_matches, summarize
 from mpc.browser import chromium_context
