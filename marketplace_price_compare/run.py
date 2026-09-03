@@ -7,6 +7,7 @@
 """
 
 import argparse
+import os
 import sys
 import time
 
@@ -190,7 +191,20 @@ def main(argv=None):
     names = [s.strip() for s in args.sources.split(",") if s.strip()]
     args.top_n = args.top_n or config.TOP_N
 
-    products = read_products(args.input, args.sheet)
+    if not os.path.exists(args.input):
+        raise SystemExit(
+            f"Файл не найден: {args.input}\n"
+            f"Проверьте, что прайс лежит в текущей папке ({os.getcwd()})\n"
+            f"и что имя указано верно. Список файлов: dir *.xlsx"
+        )
+
+    try:
+        products = read_products(args.input, args.sheet)
+    except KeyError:
+        raise SystemExit(
+            f"В файле нет листа {args.sheet!r}. "
+            f"Уберите --sheet, чтобы взять первый лист."
+        )
     if not products:
         raise SystemExit("В файле не найдено ни одной строки с названием товара.")
     if args.offset:
