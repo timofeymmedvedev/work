@@ -33,7 +33,9 @@ from mpc.sources.wildberries import WildberriesSource
 from mpc.sources.yandex_market import YandexMarketSource
 from mpc.storage import Store
 
-BROWSER_SOURCES = {"ozon", "yandex"}
+# WB обходится обычным запросом, но при обрыве TLS переключается на браузер,
+# поэтому Chromium поднимается и ради него тоже.
+BROWSER_SOURCES = {"ozon", "yandex", "wb"}
 
 # После стольких ошибок подряд площадка отключается до конца прогона.
 # Капча и блокировка не рассасываются сами: без этого предохранителя прогон
@@ -83,7 +85,8 @@ def build_sources(names, browser, page_timeout):
     for name in names:
         if name == "wb":
             sources.append(WildberriesSource(
-                dest=config.WB_DEST, delay=config.DELAY_WB))
+                dest=config.WB_DEST, delay=config.DELAY_WB,
+                browser=browser, page_timeout=page_timeout))
         elif name == "ozon":
             sources.append(OzonSource(
                 browser, delay=config.DELAY_OZON, timeout=page_timeout))

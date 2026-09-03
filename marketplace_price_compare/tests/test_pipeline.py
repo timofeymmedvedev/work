@@ -15,7 +15,7 @@ from mpc.normalize import build_query, tokenize
 from mpc.relevance import Reference
 from mpc.sources.base import SourceError, parse_price
 from mpc.sources.ozon import OzonSource, _describe, extract_offers
-from mpc.sources.wildberries import _extract_price
+from mpc.sources.wildberries import WildberriesSource, _extract_price, parse_payload
 
 
 class TestQuery(unittest.TestCase):
@@ -247,6 +247,56 @@ class TestOzonFallback(unittest.TestCase):
         self.assertEqual(_describe("Доступ ограничен"), "страница антибот-проверки")
         self.assertEqual(_describe(""), "пустой ответ")
         self.assertIn("обычный текст", _describe("обычный текст ответа"))
+
+
+class TestWildberriesFallback(unittest.TestCase):
+    PAYLOAD = {"data": {"products": [{
+        "id": 123, "brand": "Radiomaster", "name": "TX12 MKII ELRS",
+        "sizes": [{"price": {"total": 2525000}}],
+    }]}}
+
+    def test_разбор_выдачи(self):
+        offers = parse_payload(self.PAYLOAD)
+        self.assertEqual(len(offers), 1)
+        self.assertEqual(offers[0]["price"], 25250.0)
+        # Бренд у WB лежит отдельно от названия — для сопоставления нужны оба.
+        self.assertEqual(offers[0]["title"], "Radiomaster TX12 MKII ELRS")
+        self.assertIn("/catalog/123/", offers[0]["url"])
+
+    def test_переходит_на_браузер_когда_http_оборвался(self):
+        import json
+        browser = FakeBrowser(json.dumps(self.PAYLOAD))
+        src = WildberriesSource(browser=browser)
+
+        def broken(_query):
+            return [], "SSLError: EOF occurred in violation of protocol"
+        src._search_http = broken
+
+        offers = src.search("radiomaster tx12")
+        self.assertEqual(len(offers), 1)
+        self.assertEqual(offers[0]["price"], 25250.0)
+
+    def test_не_повторяет_обычный_запрос_после_отказа(self):
+        import json
+        browser = FakeBrowser(json.dumps(self.PAYLOAD))
+        src = WildberriesSource(browser=browser)
+        calls = []
+
+        def broken(_query):
+            calls.append(1)
+            return [], "SSLError"
+        src._search_http = broken
+
+        src.search("первый")
+        src.search("второй")
+        # Второй товар не должен снова платить за заведомо нерабочий путь.
+        self.assertEqual(len(calls), 1)
+
+    def test_без_браузера_ошибка_проброшена(self):
+        src = WildberriesSource(browser=None)
+        src._search_http = lambda q: ([], "SSLError")
+        with self.assertRaises(SourceError):
+            src.search("radiomaster")
 
 
 class TestExcelReport(unittest.TestCase):
